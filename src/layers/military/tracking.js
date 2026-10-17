@@ -1047,7 +1047,12 @@ export function createTracking({
    */
 
   function _onKeyDown(e) {
-    if (e.key === 'Escape' && flightState._trackedIcao) {
+    // Also allow Escape to drop leftover multi-track rings when the follow-camera
+    // moved to another layer (that nulls _trackedIcao but keeps the rings).
+    if (
+      e.key === 'Escape' &&
+      (flightState._trackedIcao || trackHighlights.hasAny())
+    ) {
       _cancelPendingTrackingRestore();
       _clearTracking(false, { origin: 'user' });
     }
@@ -1101,6 +1106,22 @@ export function createTracking({
       const picked = viewer.scene.pick(click.position);
 
       if (picked) {
+        // Clicking one of our multi-track rings re-follows that aircraft. The
+        // ring is a depth-test-disabled entity drawn over the fleet billboard,
+        // so a click on a highlighted plane usually lands here; without this it
+        // read as "empty space" and deselected the CURRENT target instead.
+        const highlight =
+          picked.id && typeof picked.id === 'object'
+            ? picked.id.gevSelectionHighlight
+            : null;
+        if (highlight && highlight.namespace === 'military') {
+          if (flightState._billboards.has(highlight.id)) {
+            _cancelPendingTrackingRestore();
+            _trackFlight(highlight.id, { origin: 'user' });
+          }
+          return; // our ring either way — never treat it as empty space
+        }
+
         // Clicking the tracked entity itself -- ignore (don't deselect)
         if (picked.id === flightState._trackedEntity) return;
 
@@ -1155,7 +1176,8 @@ export function createTracking({
       // Clicked empty space -- deselect only for a clean, short click. A slow
       // stationary press may select above, but cannot release existing tracking.
       if (!isTrackingClickGesture(gesture)) return;
-      if (flightState._trackedIcao) {
+      // Ring-only leftovers (another layer holds the camera) still clear here.
+      if (flightState._trackedIcao || trackHighlights.hasAny()) {
         _cancelPendingTrackingRestore();
         _clearTracking(false, { origin: 'user' });
       }
@@ -1192,6 +1214,7 @@ export function createTracking({
     _addTrackHighlight: trackHighlights.add,
     _removeTrackHighlight: trackHighlights.remove,
     _clearTrackHighlights: trackHighlights.clear,
+    _hasTrackHighlights: trackHighlights.hasAny,
     _applyPendingTrackingRestore,
     _cancelPendingTrackingRestore,
     _trackFlight,

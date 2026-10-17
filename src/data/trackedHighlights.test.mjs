@@ -106,6 +106,19 @@ test('remove drops the entity and clear empties every ring', () => {
   assert.equal(highlights.has('def456'), false);
 });
 
+test('hasAny reports whether any ring is live, so deselect paths can clear them', () => {
+  const { flightState } = fixture();
+  const highlights = createSelectionHighlights(flightState, 'flights');
+  assert.equal(highlights.hasAny(), false);
+  highlights.add('abc123');
+  assert.equal(highlights.hasAny(), true);
+  highlights.remove('abc123');
+  assert.equal(highlights.hasAny(), false);
+  highlights.add('abc123');
+  highlights.clear();
+  assert.equal(highlights.hasAny(), false);
+});
+
 /** Maps a highlight set back to its entities so tests can read position callbacks. */
 function highlightsMapper(flightState) {
   const viewer = flightState._viewer;

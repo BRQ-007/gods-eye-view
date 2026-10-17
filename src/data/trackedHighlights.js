@@ -73,5 +73,6 @@ export function createSelectionHighlights(flightState, namespace = 'flights') {
     remove,
     clear,
     has: (icao24) => highlights.has(icao24),
+    hasAny: () => highlights.size > 0,
   };
 }
