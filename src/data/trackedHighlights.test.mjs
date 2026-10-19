@@ -1,10 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
+import { readFileSync } from 'node:fs';
 import {
   createSelectionHighlights,
+  isSelectionHighlightId,
   SELECTION_HIGHLIGHT_COLOR,
 } from './trackedHighlights.js';
+import { resolvePickId } from './pickRegistry.js';
 
 function fakeViewer() {
   const entities = [];
@@ -58,7 +61,9 @@ test('the ring tracks the fleet billboard position live and falls back to its in
   const highlights = createSelectionHighlights(flightState, 'flights');
   highlights.add('abc123');
   const callback = highlightsMapper(flightState);
-  const initial = Cesium.Cartesian3.clone(flightState._billboards.get('abc123').position);
+  const initial = Cesium.Cartesian3.clone(
+    flightState._billboards.get('abc123').position,
+  );
   assert.ok(callback('abc123').equals(initial));
   const moved = Cesium.Cartesian3.fromDegrees(35.939, 31.953, 35_000);
   flightState._billboards.get('abc123').position = moved;
@@ -67,7 +72,10 @@ test('the ring tracks the fleet billboard position live and falls back to its in
 
 test('a missing billboard or viewer makes add a no-op', () => {
   const { viewer } = fixture();
-  const highlights = createSelectionHighlights(makeFlightState(viewer), 'military');
+  const highlights = createSelectionHighlights(
+    makeFlightState(viewer),
+    'military',
+  );
   assert.equal(highlights.add('ghost123'), false);
   assert.equal(highlights.has('ghost123'), false);
 
@@ -135,4 +143,30 @@ test('a destroyed viewer renders remove harmless', () => {
   flightState._viewer.isDestroyed = () => true;
   assert.equal(highlights.remove('abc123'), true);
   assert.equal(highlights.has('abc123'), false);
+});
+
+test('a picked ring resolves to an id its own layer owns, and no sibling', () => {
+  const { viewer, flightState } = fixture();
+  createSelectionHighlights(flightState, 'flights').add('abc123');
+  const entity = viewer.entities[0];
+  const pickedId = resolvePickId({ id: entity, primitive: { id: entity } });
+  assert.equal(isSelectionHighlightId(pickedId, 'flights'), true);
+  assert.equal(isSelectionHighlightId(pickedId, 'military'), false);
+  assert.equal(isSelectionHighlightId('abc123', 'flights'), false);
+  assert.equal(isSelectionHighlightId(null, 'flights'), false);
+  for (const [layer, namespace] of [
+    ['flights', 'flights'],
+    ['military', 'military'],
+  ]) {
+    const source = readFileSync(
+      new URL(`../layers/${layer}/lifecycle.js`, import.meta.url),
+      'utf8',
+    );
+    assert.match(
+      source,
+      new RegExp(
+        `registerPickOwner\\(\\s*'${layer}'[\\s\\S]*?isSelectionHighlightId\\(pickedId, '${namespace}'\\)`,
+      ),
+    );
+  }
 });

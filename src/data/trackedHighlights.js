@@ -6,6 +6,18 @@ import * as Cesium from 'cesium';
 export const SELECTION_HIGHLIGHT_COLOR =
   Cesium.Color.fromCssColorString('#FFB800');
 
+const HIGHLIGHT_ID_PREFIX = 'gev-track-highlight:';
+
+/** True when a pick id is one of `namespace`'s selection rings. Layers include
+ *  this in their pick-owner predicate so sibling click handlers do not read a
+ *  click on a ring as empty space. */
+export function isSelectionHighlightId(pickedId, namespace) {
+  return (
+    typeof pickedId === 'string' &&
+    pickedId.startsWith(`${HIGHLIGHT_ID_PREFIX}${namespace}:`)
+  );
+}
+
 /**
  * Persistent, camera-independent selection highlights for a tracking layer.
  *
@@ -32,7 +44,7 @@ export function createSelectionHighlights(flightState, namespace = 'flights') {
     if (!bb || !bb.position) return false;
     const fallback = Cesium.Cartesian3.clone(bb.position);
     const entity = flightState._viewer.entities.add({
-      id: `gev-track-highlight:${namespace}:${icao24}`,
+      id: `${HIGHLIGHT_ID_PREFIX}${namespace}:${icao24}`,
       position: new Cesium.CallbackProperty(
         () => flightState._billboards?.get(icao24)?.position || fallback,
         false,
