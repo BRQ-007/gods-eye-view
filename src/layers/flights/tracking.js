@@ -634,7 +634,9 @@ export function createTracking({
   ) {
     flightState._trackedCameraFrameStop?.();
     flightState._trackedCameraFrameStop = null;
-    if (!keepHighlights) trackHighlights.clear();
+    // Feed eviction of the followed aircraft is not a deselect: other rings
+    // stay; the snapshot renderer drops only the evicted aircraft's ring.
+    if (!keepHighlights && !evicted) trackHighlights.clear();
     if (!flightState._trackedIcao) {
       clearFocusTarget('flights');
       return;

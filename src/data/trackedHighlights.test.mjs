@@ -8,6 +8,8 @@ import {
   SELECTION_HIGHLIGHT_COLOR,
 } from './trackedHighlights.js';
 import { resolvePickId } from './pickRegistry.js';
+import { createTracking as createFlightTracking } from '../layers/flights/tracking.js';
+import { createTracking as createMilitaryTracking } from '../layers/military/tracking.js';
 
 function fakeViewer() {
   const entities = [];
@@ -170,3 +172,40 @@ test('a picked ring resolves to an id its own layer owns, and no sibling', () =>
     );
   }
 });
+
+for (const [layer, createTracking] of [
+  ['flights', createFlightTracking],
+  ['military', createMilitaryTracking],
+]) {
+  test(`${layer}: evicting the followed aircraft keeps the other rings`, () => {
+    const viewer = fakeViewer();
+    const flightState = makeFlightState(viewer, {
+      abc123: Cesium.Cartesian3.fromDegrees(-97.7431, 30.2672, 10_000),
+      def456: Cesium.Cartesian3.fromDegrees(35.939, 31.953, 20_000),
+    });
+    Object.assign(flightState, {
+      _trackedIcao: 'abc123',
+      records: { data: new Map() },
+    });
+    const noop = () => {};
+    const stubs = new Proxy({}, { get: () => noop });
+    const tracking = createTracking({
+      flightState,
+      services: new Proxy({}, { get: () => stubs }),
+      parts: {
+        rendering: stubs,
+        motion: stubs,
+      },
+      layer: {},
+    });
+    tracking._addTrackHighlight('def456');
+    tracking._clearTracking(false, { evicted: true });
+    assert.equal(flightState._trackedIcao, null);
+    assert.equal(tracking._hasTrackHighlights(), true);
+    assert.equal(viewer.entities.length, 1);
+    // A deliberate clear still drops every ring.
+    tracking._clearTracking(false, { origin: 'user' });
+    assert.equal(tracking._hasTrackHighlights(), false);
+    assert.equal(viewer.entities.length, 0);
+  });
+}
